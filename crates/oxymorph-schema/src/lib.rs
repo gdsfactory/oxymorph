@@ -4,9 +4,18 @@
 //! `morphnet_schema/_circuit.py` and `_simulation.py` (see `decisions/0006`).
 //! JSON/YAML field names, enum integer values and defaults match Pydantic's
 //! `model_dump_json()` / `model_dump()` exactly, which is the parity oracle.
+//! Types and fields added by the kfnetlist port (expressions, macros, stimuli)
+//! mirror kfnetlist's models at `e596bb5` (`decisions/0011`) and are left out of
+//! JSON/YAML when unset or empty, as kfnetlist's `to_json` does.
 
 pub mod builder;
+pub mod expression;
+pub mod paths;
 pub mod proto;
+
+pub use expression::{
+    BinaryOp, Call, Expression, Operator, Ternary, UnaryOp, MAX_EXPRESSION_DEPTH,
+};
 
 use indexmap::IndexMap;
 
@@ -122,6 +131,19 @@ pub enum OutputRequestKind {
     Save = 4,
 }
 
+/// Transient shape of a source: SPICE PULSE/SIN/EXP/SFFM/PWL, Spectre `type=`.
+#[derive(Serialize_repr, Deserialize_repr, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[repr(i32)]
+pub enum WaveformKind {
+    #[default]
+    Unspecified = 0,
+    Pulse = 1,
+    Sin = 2,
+    Exp = 3,
+    Sffm = 4,
+    Pwl = 5,
+}
+
 // ======================================================================
 // Parameter models
 // ======================================================================
@@ -148,6 +170,8 @@ pub struct ParameterValue {
     pub prefixed_value: Option<PrefixedValue>,
     #[serde(default)]
     pub model_ref: Option<ModelReference>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression: Option<Expression>,
 }
 
 impl ParameterValue {
@@ -158,6 +182,7 @@ impl ParameterValue {
                 prefix,
             }),
             model_ref: None,
+            expression: None,
         }
     }
 
@@ -168,15 +193,29 @@ impl ParameterValue {
                 model_interface_name: model_interface_name.into(),
                 arguments: IndexMap::new(),
             }),
+            expression: None,
         }
     }
 
-    /// Mirrors `ParameterValue._check_oneof`: at most one variant may be set.
+    /// Mirrors `ParameterValue._check_oneof`: at most one variant may be set
+    /// (and an expression is itself a valid tree).
     pub fn validate(&self) -> Result<(), String> {
-        let n = self.prefixed_value.is_some() as u8 + self.model_ref.is_some() as u8;
-        if n > 1 {
+        self.check_oneof()?;
+        if let Some(expression) = &self.expression {
+            expression.validate()?;
+        }
+        Ok(())
+    }
+
+    /// [`Self::validate`] of this value alone, not of its expression.
+    pub fn check_oneof(&self) -> Result<(), String> {
+        let set_count = self.prefixed_value.is_some() as u8
+            + self.model_ref.is_some() as u8
+            + self.expression.is_some() as u8;
+        if set_count > 1 {
             return Err(
-                "ParameterValue is a oneof: set exactly one of 'prefixed_value', 'model_ref'"
+                "ParameterValue is a oneof: set exactly one of 'prefixed_value', \
+                 'model_ref', 'expression'"
                     .to_string(),
             );
         }
@@ -208,6 +247,19 @@ pub struct Directive {
     pub name: String,
     #[serde(default)]
     pub value: String,
+}
+
+/// A multi-line block in a simulator `language`, written verbatim.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+pub struct Macro {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub language: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub properties: Properties,
 }
 
 // ======================================================================
@@ -324,6 +376,8 @@ pub struct Module {
     pub properties: Properties,
     #[serde(default)]
     pub directives: Vec<Directive>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub macros: Vec<Macro>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
@@ -402,6 +456,79 @@ pub struct InitialCondition {
     pub conditions: Properties,
 }
 
+/// A transient source shape; `args` use SPICE semantics with Spectre names. A
+/// PWL keeps its time/value pairs in `points` (t0 v0 t1 v1 ...) or reads them
+/// from `file`, stored POSIX ([`paths::posix_file`]).
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+pub struct Waveform {
+    #[serde(default)]
+    pub kind: WaveformKind,
+    #[serde(default)]
+    pub args: IndexMap<String, ParameterValue>,
+    #[serde(default)]
+    pub points: Vec<ParameterValue>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_file",
+        deserialize_with = "deserialize_file"
+    )]
+    pub file: Option<String>,
+}
+
+/// The stored form of a waveform file: POSIX, and `""` is no file (proto's unset string).
+fn stored_file(path: &str) -> Option<String> {
+    if path.is_empty() {
+        None
+    } else {
+        Some(paths::posix_file(path))
+    }
+}
+
+fn serialize_file<S: serde::Serializer>(
+    file: &Option<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    file.as_deref().and_then(stored_file).serialize(serializer)
+}
+
+fn deserialize_file<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    let file: Option<String> = Option::deserialize(deserializer)?;
+    Ok(file.as_deref().and_then(stored_file))
+}
+
+impl Waveform {
+    /// Mirrors `Waveform._points_or_file`.
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.points.is_empty() && self.file.is_some() {
+            return Err("a PWL waveform has points or a file, not both".to_string());
+        }
+        if self.file.is_some() && self.kind != WaveformKind::Pwl {
+            let kind_name = format!("{:?}", self.kind).to_uppercase();
+            return Err(format!("a file belongs to a PWL waveform, not {kind_name}"));
+        }
+        Ok(())
+    }
+}
+
+/// What drives one V/I source, named `"<module>/<instance>"`; the source element
+/// names it in `properties["stimulus"]`.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+pub struct Stimulus {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dc: Option<ParameterValue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ac_magnitude: Option<ParameterValue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ac_phase: Option<ParameterValue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waveform: Option<Waveform>,
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 pub struct Simulation {
     #[serde(default)]
@@ -416,6 +543,8 @@ pub struct Simulation {
     pub node_sets: Option<InitialCondition>,
     #[serde(default)]
     pub temperatures: Vec<f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stimuli: Vec<Stimulus>,
     #[serde(default)]
     pub options: Properties,
 }
@@ -442,6 +571,8 @@ pub struct Circuit {
     pub simulation: Option<Simulation>,
     #[serde(default)]
     pub libraries: IndexMap<String, ExternalLibrary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub macros: Vec<Macro>,
 }
 
 impl Circuit {

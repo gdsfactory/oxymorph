@@ -2,3 +2,6 @@
 **/target/
 /site/
 /.venv
+*.so
+*.pyd
+__pycache__/

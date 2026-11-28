@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
+requires = ["maturin>=1.9,<2.0"]
 build-backend = "maturin"
 
 [project]
@@ -7,9 +7,61 @@ name = "oxymorph"
 version = "0.1.0"
 description = "Rust port of the morphnet netlist parser (Python bindings)"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+
+[project.urls]
+Repository = "https://github.com/gdsfactory/oxymorph"
+Documentation = "https://gdsfactory.github.io/oxymorph/"
 
 [tool.maturin]
 manifest-path = "crates/oxymorph-python/Cargo.toml"
 module-name = "oxymorph"
 features = ["pyo3/extension-module"]
+
+# fragments in changelog/ build into CHANGELOG.md: `uvx towncrier build --version X.Y.Z` at release
+[tool.towncrier]
+name = "oxymorph"
+filename = "CHANGELOG.md"
+directory = "changelog"
+template = "towncrier:default.md"
+title_format = "## oxymorph {version} ({project_date})"
+issue_format = "[#{issue}](https://github.com/gdsfactory/oxymorph/issues/{issue})"
+underlines = ["", "", ""]
+orphan_prefix = "+"
+
+[[tool.towncrier.type]]
+directory = "feat"
+name = "Features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fix"
+name = "Bug Fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "perf"
+name = "Performance Improvements"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "refactor"
+name = "Refactoring"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "docs"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removal"
+name = "Removals & Deprecations"
+showcontent = true

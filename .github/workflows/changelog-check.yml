@@ -1,0 +1,24 @@
+name: Changelog Check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Verify news fragment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      # passes when the PR adds a fragment to changelog/, or builds CHANGELOG.md itself (a release)
+      - name: Check for fragment
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: uvx towncrier==26.9.0 check --compare-with "origin/$BASE_REF"

@@ -6,23 +6,53 @@ license.workspace = true
 repository.workspace = true
 
 [features]
-default = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams"]
+default = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog", "gsch"]
 spice = []
 hspice = ["spice"]
 xyce = ["spice"]
 spectre = []
 spectre_spice = ["spice", "spectre"]
 vams = []
+systemverilog = []
+gsch = []
 
 [[test]]
 name = "parity"
 required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams"]
+
+[[test]]
+name = "kf_fixes"
+required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog"]
+
+[[test]]
+name = "kf_expressions"
+required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog"]
+
+[[test]]
+name = "kf_writers"
+required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog"]
+
+[[test]]
+name = "kf_stimuli"
+required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog"]
+
+[[test]]
+name = "kf_systemverilog"
+required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog"]
+
+[[test]]
+name = "kf_gsch"
+required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog", "gsch"]
+
+[[example]]
+name = "dump_corpus"
+required-features = ["spice", "hspice", "xyce", "spectre", "spectre_spice", "vams", "systemverilog"]
 
 [dependencies]
 oxymorph-schema = { path = "../oxymorph-schema" }
 lark-rs.workspace = true
 regex.workspace = true
 indexmap.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true
+# preserve_order: a .gsch is written back in its own key order; float_roundtrip: its
+# numbers are read exactly, as Python's json does
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }

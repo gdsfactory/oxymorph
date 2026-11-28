@@ -1,9 +1,9 @@
 [project]
-site_url = "https://doplaydo.github.io/oxymorph/"
+site_url = "https://gdsfactory.github.io/oxymorph/"
 site_name = "oxymorph"
 site_description = "A Rust port of the morphnet netlist parser"
-repo_url = "https://github.com/doplaydo/oxymorph"
-repo_name = "doplaydo/oxymorph"
+repo_url = "https://github.com/gdsfactory/oxymorph"
+repo_name = "gdsfactory/oxymorph"
 edit_uri = "edit/main/docs/"
 
 nav = [

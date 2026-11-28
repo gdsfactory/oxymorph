@@ -1,5 +1,9 @@
 # oxymorph
 
+[![CI](https://github.com/gdsfactory/oxymorph/actions/workflows/ci.yml/badge.svg)](https://github.com/gdsfactory/oxymorph/actions/workflows/ci.yml)
+[![Tests](https://github.com/gdsfactory/oxymorph/actions/workflows/tests.yml/badge.svg)](https://github.com/gdsfactory/oxymorph/actions/workflows/tests.yml)
+[![Release](https://github.com/gdsfactory/oxymorph/actions/workflows/release.yml/badge.svg)](https://github.com/gdsfactory/oxymorph/actions/workflows/release.yml)
+
 A Rust port of [morphnet](https://github.com/das-dias/morphnet): bidirectional
 SPICE-family and Verilog-AMS netlist parsing through a shared intermediate
 representation.
@@ -8,7 +12,7 @@ oxymorph is **provably equivalent** to upstream morphnet: upstream Python is the
 oracle, its verdict is captured into a committed corpus, and the parity test
 replays that corpus offline. It parses and writes all six formats identically to
 upstream across the corpus (357 parse cases, 2142 writer outputs) — see the
-generated [Equivalence](https://doplaydo.github.io/oxymorph/equivalence/) page.
+generated [Equivalence](https://gdsfactory.github.io/oxymorph/equivalence/) page.
 
 ## Formats
 
@@ -69,7 +73,7 @@ circuit.add(inv)
 
 The same core compiles to `wasm32-unknown-unknown`
 ([`crates/oxymorph-wasm`](crates/oxymorph-wasm)) and powers the
-[playground](https://doplaydo.github.io/oxymorph/playground/): paste a netlist,
+[playground](https://gdsfactory.github.io/oxymorph/playground/): paste a netlist,
 pick input and output flavors, convert in the browser.
 
 ```js
@@ -84,11 +88,11 @@ Rebuild the playground module with `tools/build_playground.sh`.
 
 Published with [zensical](https://zensical.org) to GitHub Pages:
 
-- [Home](https://doplaydo.github.io/oxymorph/)
-- [Examples](https://doplaydo.github.io/oxymorph/examples/)
-- [Equivalence](https://doplaydo.github.io/oxymorph/equivalence/)
-- [Playground](https://doplaydo.github.io/oxymorph/playground/)
-- [API reference](https://doplaydo.github.io/oxymorph/api/)
+- [Home](https://gdsfactory.github.io/oxymorph/)
+- [Examples](https://gdsfactory.github.io/oxymorph/examples/)
+- [Equivalence](https://gdsfactory.github.io/oxymorph/equivalence/)
+- [Playground](https://gdsfactory.github.io/oxymorph/playground/)
+- [API reference](https://gdsfactory.github.io/oxymorph/api/)
 
 ## Repository layout
 

@@ -24,6 +24,6 @@ state, not a plan.
 |------|--------|
 | [architecture.md](architecture.md) | Crate layout and dependency direction |
 | [parsing.md](parsing.md) | Engines, preprocessing, error boundary, coverage |
-| [ir.md](ir.md) | IR types, serialization, builder, protobuf (deferred) |
+| [ir.md](ir.md) | IR types, serialization, builder, protobuf, paths |
 | [parity.md](parity.md) | The equivalence contract, corpus, verification |
 | [bindings.md](bindings.md) | The `oxymorph` Python module |

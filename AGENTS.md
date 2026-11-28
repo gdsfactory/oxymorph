@@ -30,7 +30,9 @@ SPICE-family / Verilog-AMS netlist parsing through a shared Protocol Buffers IR.
   [`specs/parity.md`](specs/parity.md) and
   [`decisions/0004`](decisions/0004-parity-policy.md).
 - **Do not fix upstream bugs.** Log them in `specs/parity.md` §R4 and reproduce
-  the buggy behaviour. A fix is a deliberate divergence and needs an ADR first.
+  the buggy behaviour. A fix is a deliberate divergence and needs an ADR first
+  ([`decisions/0011`](decisions/0011-extend-beyond-upstream-morphnet.md) covers
+  fixes ported from kfnetlist, via `tests/corpus/overrides.json`).
 - Code that intentionally deviates carries `// parity: <id>` resolving to an R4
   row.
 
@@ -41,17 +43,30 @@ SPICE-family / Verilog-AMS netlist parsing through a shared Protocol Buffers IR.
 - **One-way layering:** `oxymorph-schema` ← `oxymorph-netlist` ← `oxymorph`
   ← bindings. `oxymorph-schema` must never depend on parsing.
 - **The IR is Pydantic-normative** ([`decisions/0005`](decisions/0005-ir-and-protobuf.md)).
-  When the proto and the Pydantic models disagree, Python's behaviour wins.
-- **Grammars are verbatim upstream `.lark` files**, embedded via `include_lark!`
+  When the proto and the Pydantic models disagree, Python's behaviour wins. For
+  types added by the kfnetlist port, the kfnetlist Pydantic models at `e596bb5`
+  are the normative spec (read, not executed;
+  [`decisions/0011`](decisions/0011-extend-beyond-upstream-morphnet.md)).
+- **The protobuf schema is Rust, in `crates/oxymorph-schema/src/proto.rs`**
+  ([`decisions/0006`](decisions/0006-ir-representation.md)): hand-written
+  encode/decode, no `.proto` compiled, no `prost` or `protoc`. Field numbers are
+  upstream's plus kfnetlist's, unchanged. `vendor/morphnet/protos/` stay the
+  reference for the original corpus (whose oracle bytes must still decode
+  message-equal).
+- **Grammars are verbatim `.lark` files from kfnetlist `f020af6`** (upstream
+  morphnet's until the port reaches it), embedded via `include_lark!`
   ([`decisions/0002`](decisions/0002-parser-engine.md)). Do not translate them to
   another parser DSL, and do not edit them to make a test pass.
 - **The parser is behind our own trait.** Generated tree/error types must not
   leak past `oxymorph-netlist`; map `String` errors to our structured error type.
 - **Core tests need no Python.** The golden corpus is committed; the
   differential harness is a separate, non-blocking job.
-- **Bindings are thin.** `oxymorph-python` exposes the whole functionality but no
-  logic; the Python module is named `oxymorph` and is not API-compatible with
-  `morphnet`.
+- **The bindings hold no netlist logic.** `oxymorph-python` is the Python package
+  `oxymorph`: a graph of mutable `#[pyclass]` objects that mirrors the IR and is
+  converted to it in `convert.rs`
+  ([`decisions/0012`](decisions/0012-mutable-python-object-model.md)). The Rust IR
+  is the only schema, so do not define classes or fields in Python. The package
+  is not API-compatible with `morphnet`. Its tests run with `just test-python`.
 
 ## Committing and pushing
 

@@ -6,9 +6,12 @@
 pub mod ast;
 pub mod engine;
 pub mod error;
+pub mod expression;
 pub mod formats;
+pub mod hdl;
 pub mod helpers;
 pub mod preprocess;
+pub mod stimulus;
 
 pub use error::Error;
 pub use formats::*;

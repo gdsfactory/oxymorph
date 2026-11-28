@@ -20,7 +20,7 @@ pip install oxymorph
 Building from source requires Rust and [maturin](https://maturin.rs):
 
 ```bash
-git clone https://github.com/doplaydo/oxymorph
+git clone https://github.com/gdsfactory/oxymorph
 cd oxymorph
 git submodule update --init --recursive
 uv venv && uv pip install maturin

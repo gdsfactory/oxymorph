@@ -77,6 +77,8 @@ How we will know the decision is honored (commands, tests, checks).
 | [0005](0005-ir-and-protobuf.md) | IR representation and protobuf strategy | implemented (prost-first step superseded by 0006) |
 | [0006](0006-ir-representation.md) | IR representation: hand-written serde types | implemented |
 | [0007](0007-oracle-corpus-testing.md) | Oracle-corpus testing strategy | implemented |
-| [0008](0008-python-bindings-and-docs.md) | Python bindings and documentation site | implemented |
+| [0008](0008-python-bindings-and-docs.md) | Python bindings and documentation site | implemented ("bindings are thin" superseded by 0012) |
 | [0009](0009-wasm-and-playground.md) | WebAssembly target and docs playground | implemented |
 | [0010](0010-protobuf-interchange.md) | Protobuf interchange implemented | implemented |
+| [0011](0011-extend-beyond-upstream-morphnet.md) | Extend beyond upstream morphnet | implemented |
+| [0012](0012-mutable-python-object-model.md) | Mutable Python object model (supersedes part of 0008) | implemented |

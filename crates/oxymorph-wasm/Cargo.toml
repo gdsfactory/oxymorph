@@ -3,7 +3,7 @@ name = "oxymorph-wasm"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/doplaydo/oxymorph"
+repository = "https://github.com/gdsfactory/oxymorph"
 description = "WebAssembly bindings for oxymorph"
 
 [lib]

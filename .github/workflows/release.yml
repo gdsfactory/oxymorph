@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  # build (never publish) when a PR touches packaging, so a tag never finds a broken wheel
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - pyproject.toml
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # cargo fetches lark-rs (a git dependency) with the git CLI, so it honours core.longpaths
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  wheels:
+    name: wheel ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, runner: ubuntu-latest, target: x86_64-unknown-linux-gnu, manylinux: auto }
+          - { name: linux-aarch64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, manylinux: auto }
+          - { name: musllinux-x86_64, runner: ubuntu-latest, target: x86_64-unknown-linux-musl, manylinux: musllinux_1_2 }
+          - { name: musllinux-aarch64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, manylinux: musllinux_1_2 }
+          - { name: macos-x86_64, runner: macos-15-intel, target: x86_64-apple-darwin, manylinux: "off" }
+          - { name: macos-aarch64, runner: macos-latest, target: aarch64-apple-darwin, manylinux: "off" }
+          - { name: windows-x64, runner: windows-latest, target: x86_64-pc-windows-msvc, manylinux: "off" }
+          # no CPython below 3.11 exists for Windows on Arm
+          - { name: windows-arm64, runner: windows-11-arm, target: aarch64-pc-windows-msvc, manylinux: "off", pythons: "3.11 3.14" }
+    steps:
+      # before checkout: keep LF test data byte-identical, and fit lark-rs's deep submodule paths
+      - name: Configure git (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: false
+      # every wheel runs the full suite on the abi3 floor and the newest CPython, on its own machine
+      - name: Test the wheel
+        shell: bash
+        env:
+          PYTHONS: ${{ matrix.pythons || '3.9 3.14' }}
+          MUSL: ${{ contains(matrix.target, 'musl') }}
+        run: |
+          for py in $PYTHONS; do
+            echo "::group::Python $py"
+            if [ "$MUSL" = true ]; then
+              docker run --rm -v "$PWD:/io" -w /io "python:$py-alpine" sh -c \
+                "pip install -q --no-index --find-links dist oxymorph && python -m unittest discover -s crates/oxymorph-python/tests"
+            else
+              uv run --isolated --no-project --python "$py" --no-index --find-links dist --with oxymorph \
+                python -m unittest discover -s crates/oxymorph-python/tests
+            fi
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ matrix.name }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: sdist
+          args: --out dist
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: false
+      # pip users on platforms without a wheel build from this, so it must build and pass
+      - name: Build and test from the sdist
+        run: |
+          uv run --isolated --no-project --python 3.14 --with dist/*.tar.gz \
+            python -m unittest discover -s crates/oxymorph-python/tests
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-sdist
+          path: dist
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write # GitHub release
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag matches package version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os, tomllib
+          expected = os.environ["TAG_NAME"].removeprefix("v")
+          versions = {
+              "pyproject.toml": tomllib.load(open("pyproject.toml", "rb"))["project"]["version"],
+              "Cargo.toml": tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"],
+              "crates/oxymorph-python/Cargo.toml": tomllib.load(open("crates/oxymorph-python/Cargo.toml", "rb"))["package"]["version"],
+          }
+          bad = {path: version for path, version in versions.items() if version != expected}
+          if bad:
+              raise SystemExit(f"tag {expected} does not match {bad}")
+          PY
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes

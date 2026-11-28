@@ -3,8 +3,10 @@
 
 use oxymorph_schema::Circuit;
 
-use crate::formats::spice::write_spice;
+use crate::expression::Dialect;
+use crate::formats::spice::write_spice_dialect;
 
+/// SPICE with expressions in single quotes.
 pub fn write_hspice(circuit: &Circuit) -> String {
-    write_spice(circuit)
+    write_spice_dialect(circuit, Dialect::Hspice, "")
 }

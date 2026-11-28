@@ -4,7 +4,9 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 
-fn block_comment_re() -> &'static Regex {
+pub mod systemverilog;
+
+pub(crate) fn block_comment_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?s)/\*.*?\*/").unwrap())
 }
@@ -160,14 +162,17 @@ pub struct SpectreSpiceSection {
     pub text: String,
 }
 
-fn simulator_lang_re() -> &'static Regex {
+pub fn simulator_lang_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?i)^\s*simulator\s+lang\s*=\s*(\w+)").unwrap())
 }
 
-pub fn preprocess_spectre_spice(text: &str) -> Vec<SpectreSpiceSection> {
+/// Split a Spectre-SPICE file into sections by language mode. The file starts in
+/// `language` (`spice` for a Spectre-SPICE file, `spectre` for a Spectre one); a
+/// `simulator lang=spectre|spice` line switches the mode.
+pub fn preprocess_spectre_spice(text: &str, language: &str) -> Vec<SpectreSpiceSection> {
     let mut sections = Vec::new();
-    let mut current_lang = "spice".to_string();
+    let mut current_lang = language.to_string();
     let mut current_lines: Vec<String> = Vec::new();
     for line in text.lines() {
         if let Some(caps) = simulator_lang_re().captures(line) {
@@ -203,19 +208,26 @@ pub struct VamsPreprocessResult {
     pub analog_blocks: Vec<String>,
 }
 
-fn line_comment_re() -> &'static Regex {
+pub(crate) fn line_comment_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"//[^\n]*").unwrap())
 }
 
-fn directive_re() -> &'static Regex {
+pub(crate) fn directive_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?m)^\s*`(\w+)\s*(.*)").unwrap())
 }
 
-pub fn preprocess_vams(text: &str) -> VamsPreprocessResult {
+/// Strip comments, keep the active `` `ifdef `` branches for `defines` (expanding
+/// macros), extract directives and replace analog blocks with placeholders.
+pub fn preprocess_vams(
+    text: &str,
+    defines: &indexmap::IndexMap<String, String>,
+    budget: &mut crate::hdl::ExpansionBudget,
+) -> Result<VamsPreprocessResult, crate::Error> {
     let text = block_comment_re().replace_all(text, "").to_string();
     let text = line_comment_re().replace_all(&text, "").to_string();
+    let text = crate::hdl::apply_defines(&text, defines, budget)?;
 
     let mut directives: Vec<(String, String)> = Vec::new();
     for caps in directive_re().captures_iter(&text) {
@@ -237,11 +249,11 @@ pub fn preprocess_vams(text: &str) -> VamsPreprocessResult {
         text.push('\n');
     }
 
-    VamsPreprocessResult {
+    Ok(VamsPreprocessResult {
         text,
         directives,
         analog_blocks,
-    }
+    })
 }
 
 fn analog_begin_re() -> &'static Regex {

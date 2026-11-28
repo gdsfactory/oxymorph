@@ -75,11 +75,22 @@ circuit.add(inv)
 print(oxymorph.write_vams(circuit))
 ```
 
-## Exposed types
+## Edit a circuit in place
 
-The Python module exposes the whole IR: `Circuit`, `Module`, `Port`,
-`PortReference`, `Connection`, `Bus`, `ModuleReference`, `Parameter`,
-`ParameterValue`, `PrefixedValue`, `ModelReference`, `ModelInterface`,
-`Directive`, `ExternalModule`, `ExternalLibrary`, `Simulation`, `Analysis`,
-`OutputRequest`, `Measurement`, `InitialCondition`, and the enums
-`PortDirection` / `SignalDomain` as integer constants.
+The IR classes are mutable. Lists, dicts and nested objects are live, so an edit
+is what the writers see:
+
+```python
+import copy
+
+edited = copy.deepcopy(circuit)
+top = edited.modules[0]
+top.module_references.append(oxymorph.module_reference("R0", "resistor", value=2.0))
+top.connect("out", ("R0", "p"), ("", "out"))
+edited.properties["backannotated"] = "true"
+top.module_references[0].parameters[0].default_value.prefixed_value.double_value = 2
+assert edited != circuit
+assert oxymorph.Circuit.from_json(edited.to_json()) == edited
+```
+
+See the [API reference](api.md) for the whole surface.

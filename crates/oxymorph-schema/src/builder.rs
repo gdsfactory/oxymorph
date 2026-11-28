@@ -4,6 +4,8 @@ use crate::*;
 
 /// A parameter specification: an existing [`Parameter`], a `(name, default)`
 /// pair, or a bare name.
+// A short-lived argument; `Parameter` is large since `ParameterValue` holds an `Expression`.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum ParamSpec {
     Parameter(Parameter),
